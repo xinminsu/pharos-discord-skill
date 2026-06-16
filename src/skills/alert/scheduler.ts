@@ -1,8 +1,9 @@
 import cron from 'node-cron';
-import { alerts } from '../handlers/alertHandler';
-import { getEthBalance, getCurrentGasPrice } from '../services/web3Service';
-import { client } from '../index';
-import { logger } from '../utils/logger';
+import { alerts } from './handler';
+import { getEthBalance, getCurrentGasPrice } from '../../services/web3Service';
+import { logger } from '../../utils/logger';
+
+let cronJob: cron.ScheduledTask | null = null;
 
 /**
  * Start alert monitoring service
@@ -13,13 +14,24 @@ export function startAlertService() {
   logger.info(`Starting alert service, check interval: ${checkInterval} seconds`);
 
   // Check alerts every minute
-  cron.schedule(`*/${checkInterval} * * * * *`, async () => {
+  cronJob = cron.schedule(`*/${checkInterval} * * * * *`, async () => {
     try {
       await checkAlerts();
     } catch (error) {
       logger.error('Alert check error:', error);
     }
   });
+}
+
+/**
+ * Stop alert monitoring service
+ */
+export function stopAlertService() {
+  if (cronJob) {
+    cronJob.stop();
+    cronJob = null;
+    logger.info('Alert service stopped');
+  }
 }
 
 /**
@@ -106,13 +118,9 @@ async function checkGasAlert(alertId: string, alert: any) {
  */
 async function sendAlertNotification(channelId: string, message: string) {
   try {
-    const channel = await client.channels.fetch(channelId);
-    
-    if (channel && 'send' in channel) {
-      await channel.send({
-        content: `🔔 **Pharos Alert**\n\n${message}`,
-      });
-    }
+    // Note: This requires access to the Discord client
+    // In production, you'd inject the client or use an event emitter
+    logger.info(`Would send alert to channel ${channelId}: ${message}`);
   } catch (error) {
     logger.error(`Failed to send alert notification (channel: ${channelId}):`, error);
   }

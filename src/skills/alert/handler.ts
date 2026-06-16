@@ -1,5 +1,5 @@
 import { ChatInputCommandInteraction, EmbedBuilder } from 'discord.js';
-import { logger } from '../utils/logger';
+import { logger } from '../../utils/logger';
 
 // Simple in-memory storage (production should use database)
 interface Alert {
@@ -14,23 +14,7 @@ interface Alert {
 
 const alerts: Map<string, Alert> = new Map();
 
-export async function handleAlertCommand(interaction: ChatInputCommandInteraction) {
-  const subcommand = interaction.options.getSubcommand();
-
-  switch (subcommand) {
-    case 'add':
-      await handleAddAlert(interaction);
-      break;
-    case 'list':
-      await handleListAlerts(interaction);
-      break;
-    case 'remove':
-      await handleRemoveAlert(interaction);
-      break;
-  }
-}
-
-async function handleAddAlert(interaction: ChatInputCommandInteraction) {
+export async function handleAlertAdd(interaction: ChatInputCommandInteraction) {
   await interaction.deferReply();
 
   const type = interaction.options.getString('type', true);
@@ -79,7 +63,7 @@ async function handleAddAlert(interaction: ChatInputCommandInteraction) {
   logger.info(`Alert created: ${alertId} (${type})`);
 }
 
-async function handleListAlerts(interaction: ChatInputCommandInteraction) {
+export async function handleAlertList(interaction: ChatInputCommandInteraction) {
   await interaction.deferReply();
 
   const userAlerts = Array.from(alerts.values()).filter(
@@ -112,7 +96,7 @@ async function handleListAlerts(interaction: ChatInputCommandInteraction) {
   });
 }
 
-async function handleRemoveAlert(interaction: ChatInputCommandInteraction) {
+export async function handleAlertRemove(interaction: ChatInputCommandInteraction) {
   await interaction.deferReply();
 
   const alertId = interaction.options.getString('id', true);

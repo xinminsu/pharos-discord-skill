@@ -1,5 +1,5 @@
 import { ChatInputCommandInteraction } from 'discord.js';
-import { logger } from '../utils/logger';
+import { logger } from '../../utils/logger';
 
 export async function handlePushCommand(interaction: ChatInputCommandInteraction) {
   await interaction.deferReply();

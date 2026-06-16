@@ -1,6 +1,6 @@
 import { ChatInputCommandInteraction, EmbedBuilder } from 'discord.js';
-import { getEthBalance, getTokenBalance } from '../services/web3Service';
-import { logger } from '../utils/logger';
+import { getEthBalance, getTokenBalance } from '../../services/web3Service';
+import { logger } from '../../utils/logger';
 
 export async function handleBalanceCommand(interaction: ChatInputCommandInteraction) {
   await interaction.deferReply();

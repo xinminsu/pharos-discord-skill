@@ -1,13 +1,13 @@
-# Pharos Discord Skill
+# Pharos Discord Bot
 
-A powerful Discord Bot that provides blockchain queries, transaction execution, gas estimation, and event notifications.
+A powerful Discord Bot built with Skill-based architecture for blockchain queries, transaction execution, gas estimation, and event notifications on the Pharos network.
 
 ## ✨ Features
 
 ### 📊 Balance Query
 - Query ETH balance for any wallet address
 - Query ERC20 token balances
-- Multi-chain support: Ethereum, Polygon, BSC
+- Real-time blockchain data from Pharos network
 
 ### ⛽ Gas Related
 - Real-time gas price queries
@@ -24,21 +24,36 @@ A powerful Discord Bot that provides blockchain queries, transaction execution, 
 - Push notification messages to specified channels
 - Support custom message content
 
+## 🏗️ Architecture
+
+This project uses a modern **Skill-based architecture** where each feature is implemented as an independent skill module:
+
+```
+src/
+├── core/              # Core framework
+│   └── SkillManager.ts    # Manages skill lifecycle
+├── skills/            # Modular skills
+│   ├── balance/       # Balance query skill
+│   ├── gas/           # Gas price & estimation skill
+│   ├── alert/         # Event monitoring skill
+│   └── push/          # Message push skill
+├── services/          # Shared services
+│   └── web3Service.ts # Blockchain interaction layer
+└── utils/             # Utilities
+    └── logger.ts      # Logging system
+```
+
+**Benefits:**
+- ✅ **Modular**: Each skill is self-contained and independent
+- ✅ **Extensible**: Easy to add new features without modifying existing code
+- ✅ **Maintainable**: Clear separation of concerns
+- ✅ **Testable**: Isolated modules for easy testing
+
 ## 🚀 Quick Start
 
 ### Prerequisites
 
-- Node.js >= 18.x
-- npm or yarn
-- Discord Bot Token
-- Blockchain RPC node URL (e.g., Infura, Alchemy)
-
-### Installation Steps
-
 1. **Clone the project**
-```bash
-cd pharos-discord-skill
-```
 
 2. **Install dependencies**
 ```bash
@@ -57,32 +72,15 @@ Edit the `.env` file and fill in your configuration:
 DISCORD_TOKEN=your_discord_bot_token_here
 DISCORD_CLIENT_ID=your_client_id_here
 
-# Blockchain Configuration
-ETH_RPC_URL=https://mainnet.infura.io/v3/your_infura_key
-ETH_CHAIN_ID=1
-
-# Optional: Additional RPC endpoints for other chains
-POLYGON_RPC_URL=https://polygon-rpc.com
-BSC_RPC_URL=https://bsc-dataseed.bnbchain.org
+# Pharos Blockchain Configuration
+PHAROS_RPC_URL=https://rpc.pharos.network
+PHAROS_CHAIN_ID=1
 
 # Logging
 LOG_LEVEL=info
 ```
 
 4. **Get Discord Bot Token**
-
-   a. Visit [Discord Developer Portal](https://discord.com/developers/applications)
-   
-   b. Create a new application
-   
-   c. Go to "Bot" page, create bot and copy Token
-   
-   d. Go to "OAuth2" page and copy Client ID
-   
-   e. Invite bot to your server with the following permissions:
-   ```
-   https://discord.com/oauth2/authorize?client_id=YOUR_CLIENT_ID&permissions=8&scope=bot%20applications.commands
-   ```
 
 5. **Run the project**
 
@@ -101,41 +99,35 @@ npm start
 
 ### `/balance` - Query Balance
 
-Query wallet ETH or token balance.
+Query wallet ETH or token balance on Pharos network.
 
 **Parameters:**
 - `address` (required): Wallet address
-- `network` (optional): Blockchain network (ethereum/polygon/bsc), default ethereum
 - `token` (optional): ERC20 token contract address
 
 **Example:**
 ```
 /balance address:0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb
-/balance address:0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb network:ethereum token:0xdAC17F958D2ee523a2206206994597C13D831ec7
+/balance address:0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb token:0xdAC17F958D2ee523a2206206994597C13D831ec7
 ```
 
 ### `/gas-price` - Query Gas Price
 
-View current network gas price information.
-
-**Parameters:**
-- `network` (optional): Blockchain network, default ethereum
+View current Pharos network gas price information.
 
 **Example:**
 ```
 /gas-price
-/gas-price network:polygon
 ```
 
 ### `/gas-estimate` - Estimate Gas Fees
 
-Estimate gas fees required for a transaction.
+Estimate gas fees required for a transaction on Pharos.
 
 **Parameters:**
 - `from` (required): Sender address
 - `to` (required): Receiver address
 - `value` (optional): Transfer amount (ETH), default 0
-- `network` (optional): Blockchain network, default ethereum
 
 **Example:**
 ```
@@ -193,38 +185,31 @@ Push notification messages to channels.
 ```
 pharos-discord-skill/
 ├── src/
-│   ├── commands/           # Discord command definitions
-│   │   ├── commands.ts     # All commands
-│   │   ├── register.ts     # Command registration
-│   │   └── index.ts
-│   ├── handlers/           # Command handlers
-│   │   ├── interactionHandler.ts
-│   │   ├── balanceHandler.ts
-│   │   ├── gasEstimateHandler.ts
-│   │   ├── gasPriceHandler.ts
-│   │   ├── alertHandler.ts
-│   │   └── pushHandler.ts
-│   ├── services/           # Business logic services
-│   │   └── web3Service.ts  # Web3 related functions
-│   ├── utils/              # Utility functions
+│   ├── core/               # Core framework
+│   │   └── SkillManager.ts # Skill lifecycle manager
+│   ├── skills/             # Modular skills
+│   │   ├── types.ts        # Skill interfaces
+│   │   ├── BaseSkill.ts    # Base skill class
+│   │   ├── SkillRegistry.ts# Skill registry
+│   │   ├── balance/        # Balance skill
+│   │   ├── gas/            # Gas skill
+│   │   ├── alert/          # Alert skill
+│   │   └── push/           # Push skill
+│   ├── services/           # Shared services
+│   │   └── web3Service.ts  # Blockchain service layer
+│   ├── utils/              # Utilities
 │   │   └── logger.ts       # Logging utility
 │   └── index.ts            # Entry point
-├── logs/                   # Log files directory
-├── .env.example            # Environment variables example
-├── .gitignore
+├── docs/                   # Documentation
+│   └── SKILL_DEVELOPMENT.md
+├── logs/                   # Log files
+├── .env.example            # Environment variables template
 ├── package.json
 ├── tsconfig.json
 └── README.md
 ```
 
 ## 🔧 Tech Stack
-
-- **TypeScript**: Type-safe JavaScript
-- **discord.js v14**: Discord Bot framework
-- **ethers.js v6**: Ethereum interaction library
-- **winston**: Logging
-- **node-cron**: Scheduled tasks (for alert checking)
-- **dotenv**: Environment variable management
 
 ## ⚙️ Configuration
 
@@ -235,10 +220,8 @@ pharos-discord-skill/
 
 ### Blockchain Configuration
 
-- `ETH_RPC_URL`: Ethereum mainnet RPC node
-- `POLYGON_RPC_URL`: Polygon network RPC node
-- `BSC_RPC_URL`: BSC network RPC node
-- `ETH_CHAIN_ID`: Chain ID (default 1)
+- `PHAROS_RPC_URL`: Pharos network RPC node
+- `PHAROS_CHAIN_ID`: Pharos chain ID (default 1)
 
 ### Other Configuration
 
@@ -247,11 +230,16 @@ pharos-discord-skill/
 
 ## 📝 Development Guide
 
-### Adding New Commands
+### Adding New Skills
 
-1. Define the command in `src/commands/commands.ts`
-2. Create corresponding handler file (e.g., `src/handlers/xxxHandler.ts`)
-3. Register command route in `src/handlers/interactionHandler.ts`
+Creating a new skill is simple:
+
+1. Create skill directory: `src/skills/my-skill/`
+2. Extend BaseSkill class
+3. Define commands and handlers
+4. Register in `src/index.ts`
+
+See [SKILL_DEVELOPMENT.md](docs/SKILL_DEVELOPMENT.md) for detailed guide.
 
 ### Viewing Logs
 

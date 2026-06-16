@@ -1,12 +1,15 @@
 import { Client, GatewayIntentBits, Partials } from 'discord.js';
 import dotenv from 'dotenv';
-import { registerCommands } from './commands/register';
-import { handleInteraction } from './handlers/interactionHandler';
+import { SkillManager } from './core/SkillManager';
+import { BalanceSkill } from './skills/balance';
+import { GasSkill } from './skills/gas';
+import { AlertSkill } from './skills/alert';
+import { PushSkill } from './skills/push';
 import { logger } from './utils/logger';
-import { startAlertService } from './services/alertService';
 
 dotenv.config();
 
+// Create Discord client
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
@@ -16,16 +19,39 @@ const client = new Client({
   partials: [Partials.Channel],
 });
 
+// Create Skill Manager
+const skillManager = new SkillManager();
+
 // Bot ready event
-client.once('ready', () => {
+client.once('ready', async () => {
   logger.info(`Pharos Bot is online! Username: ${client.user?.tag}`);
   logger.info(`Currently serving ${client.guilds.cache.size} servers`);
+  
+  // Initialize Skill Manager
+  await skillManager.initialize();
+  
+  // Register all skills
+  const skills = [
+    new BalanceSkill(),
+    new GasSkill(),
+    new AlertSkill(),
+    new PushSkill(),
+  ];
+  
+  for (const skill of skills) {
+    await skillManager.registerSkill(skill);
+  }
+  
+  logger.info(`Registered ${skillManager.getSkillCount()} skills`);
+  
+  // Register commands with Discord
+  await registerCommands();
 });
 
 // Handle interaction events
 client.on('interactionCreate', async (interaction) => {
   if (interaction.isChatInputCommand()) {
-    await handleInteraction(interaction);
+    await skillManager.handleCommand(interaction);
   }
 });
 
@@ -38,6 +64,21 @@ process.on('unhandledRejection', (error: any) => {
   logger.error('Unhandled Promise rejection:', error);
 });
 
+// Graceful shutdown
+process.on('SIGINT', async () => {
+  logger.info('Shutting down...');
+  await skillManager.shutdown();
+  client.destroy();
+  process.exit(0);
+});
+
+process.on('SIGTERM', async () => {
+  logger.info('Shutting down...');
+  await skillManager.shutdown();
+  client.destroy();
+  process.exit(0);
+});
+
 // Start the bot
 const TOKEN = process.env.DISCORD_TOKEN;
 
@@ -46,20 +87,45 @@ if (!TOKEN) {
   process.exit(1);
 }
 
-// Register commands and login
-registerCommands()
-  .then(() => {
-    logger.info('Commands registered, logging in...');
-    return client.login(TOKEN);
-  })
+/**
+ * Register commands with Discord API
+ */
+async function registerCommands() {
+  try {
+    const { REST, Routes } = await import('discord.js');
+    const rest = new REST({ version: '10' }).setToken(TOKEN!);
+    const CLIENT_ID = process.env.DISCORD_CLIENT_ID;
+    
+    if (!CLIENT_ID) {
+      throw new Error('DISCORD_CLIENT_ID not configured');
+    }
+    
+    // Collect all commands from skills
+    const allSkills = skillManager.getAllSkills();
+    const commands = allSkills.flatMap(skill => skill.commands);
+    
+    logger.info(`Registering ${commands.length} commands...`);
+    
+    const data = await rest.put(
+      Routes.applicationCommands(CLIENT_ID),
+      { body: commands.map(cmd => cmd.toJSON()) }
+    );
+    
+    logger.info(`Successfully registered ${(data as any[]).length} commands`);
+  } catch (error) {
+    logger.error('Command registration failed:', error);
+    throw error;
+  }
+}
+
+// Login to Discord
+client.login(TOKEN)
   .then(() => {
     logger.info('Pharos Bot logged in successfully!');
-    // Start alert service
-    startAlertService();
   })
   .catch((error: any) => {
     logger.error('Login failed:', error);
     process.exit(1);
   });
 
-export { client };
+export { client, skillManager };
