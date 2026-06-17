@@ -1,4 +1,5 @@
 import { ChatInputCommandInteraction, EmbedBuilder } from 'discord.js';
+import { ethers } from 'ethers';
 import { estimateGas, getCurrentGasPrice } from '../../services/web3Service';
 import { logger } from '../../utils/logger';
 
@@ -45,13 +46,18 @@ export async function handleGasEstimateCommand(interaction: ChatInputCommandInte
   // Validate address format
   if (!/^0x[a-fA-F0-9]{40}$/.test(from) || !/^0x[a-fA-F0-9]{40}$/.test(to)) {
     await interaction.editReply({
-      content: '❌ Invalid wallet address format',
+      content: '❌ Invalid wallet address format. Addresses must be 42 characters (0x + 40 hex chars)',
     });
     return;
   }
 
   try {
-    const gasInfo = await estimateGas(from, to, value, '0x');
+    // Convert addresses to checksum format to avoid checksum errors
+    // First convert to lowercase, then get proper checksum
+    const checksumFrom = ethers.getAddress(from.toLowerCase());
+    const checksumTo = ethers.getAddress(to.toLowerCase());
+    
+    const gasInfo = await estimateGas(checksumFrom, checksumTo, value, '0x');
 
     const embed = new EmbedBuilder()
       .setTitle('⛽ Gas Estimation Result')
@@ -79,9 +85,14 @@ export async function handleGasEstimateCommand(interaction: ChatInputCommandInte
 
     logger.info(`Gas estimate: ${from} -> ${to} on Pharos`);
   } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     logger.error('Gas estimation failed:', error);
+    
+    // Format the error message for better readability
+    let userMessage = `❌ Gas estimation failed\n\n${errorMessage}`;
+    
     await interaction.editReply({
-      content: `❌ Estimation failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      content: userMessage,
     });
   }
 }

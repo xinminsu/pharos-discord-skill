@@ -1,4 +1,5 @@
 import cron from 'node-cron';
+import { ethers } from 'ethers';
 import { alerts } from './handler';
 import { getEthBalance, getCurrentGasPrice } from '../../services/web3Service';
 import { logger } from '../../utils/logger';
@@ -72,7 +73,9 @@ async function checkBalanceAlert(alertId: string, alert: any) {
   }
 
   try {
-    const balance = await getEthBalance(alert.address);
+    // Convert address to checksum format
+    const checksumAddress = ethers.getAddress(alert.address.toLowerCase());
+    const balance = await getEthBalance(checksumAddress);
     const balanceNum = parseFloat(balance);
 
     if (balanceNum >= alert.threshold) {

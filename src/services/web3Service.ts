@@ -1,17 +1,44 @@
 import { ethers } from 'ethers';
+import dotenv from 'dotenv';
+
+// Load environment variables first
+dotenv.config();
 
 // RPC URL configuration
 const rpcUrls = {
   pharos: process.env.PHAROS_RPC_URL || 'https://rpc.pharos.network',
 };
 
-// Create Provider instances
+// Pharos network configuration
+const pharosChainId = parseInt(process.env.PHAROS_CHAIN_ID || '1672');
+const pharosNetwork = {
+  chainId: pharosChainId,
+  name: 'pharos',
+};
+
+console.log('[Web3Service] Initializing Pharos provider with URL:', rpcUrls.pharos);
+console.log('[Web3Service] Chain ID:', pharosChainId);
+
+// Create Provider instances with explicit network configuration
 export const providers = {
-  pharos: new ethers.JsonRpcProvider(rpcUrls.pharos),
+  pharos: new ethers.JsonRpcProvider(rpcUrls.pharos, pharosNetwork, {
+    staticNetwork: true,
+    batchMaxCount: 1,
+  }),
 };
 
 // Default to Pharos
 export const defaultProvider = providers.pharos;
+
+/**
+ * Helper function to add timeout to promises
+ */
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number = 10000): Promise<T> {
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    setTimeout(() => reject(new Error(`RPC request timeout after ${timeoutMs / 1000} seconds`)), timeoutMs);
+  });
+  return Promise.race([promise, timeoutPromise]);
+}
 
 /**
  * Get Provider for specified network
@@ -28,9 +55,50 @@ export function getProvider(network: string = 'pharos'): ethers.JsonRpcProvider 
  * Query address ETH balance
  */
 export async function getEthBalance(address: string, network: string = 'pharos'): Promise<string> {
-  const provider = getProvider(network);
-  const balance = await provider.getBalance(address);
-  return ethers.formatEther(balance);
+  try {
+    const provider = getProvider(network);
+    
+    logger.info(`Querying balance for ${address} on ${network}`);
+    logger.info(`Provider URL: ${provider._getConnection().url}`);
+    
+    // Set a timeout for the request
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('RPC_REQUEST_TIMEOUT')), 20000);
+    });
+    
+    logger.info('Calling provider.getBalance()...');
+    const balancePromise = provider.getBalance(address);
+    
+    // Race between the balance query and timeout
+    const balance = await Promise.race([balancePromise, timeoutPromise]) as bigint;
+    
+    const formattedBalance = ethers.formatEther(balance);
+    logger.info(`Balance query successful: ${formattedBalance} ETH`);
+    return formattedBalance;
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    logger.error(`Balance query error: ${errorMessage} | Stack: ${error instanceof Error ? error.stack : 'N/A'}`);
+    
+    if (errorMessage === 'RPC_REQUEST_TIMEOUT') {
+      throw new Error('Request timeout: Pharos RPC node is not responding within 20 seconds');
+    }
+    
+    // Check for common RPC errors
+    if (errorMessage.includes('ECONNREFUSED')) {
+      throw new Error('Connection refused: Cannot connect to Pharos RPC node');
+    }
+    if (errorMessage.includes('ENOTFOUND')) {
+      throw new Error('DNS error: Pharos RPC URL not found');
+    }
+    if (errorMessage.includes('403') || errorMessage.includes('401')) {
+      throw new Error('Access denied: RPC endpoint requires authentication or API key');
+    }
+    if (errorMessage.includes('429')) {
+      throw new Error('Rate limited: Too many requests to RPC endpoint');
+    }
+    
+    throw new Error(`RPC error: ${errorMessage}`);
+  }
 }
 
 /**
@@ -53,11 +121,11 @@ export async function getTokenBalance(
   const contract = new ethers.Contract(tokenAddress, erc20Abi, provider);
   
   try {
-    const [balance, decimals, symbol] = await Promise.all([
+    const [balance, decimals, symbol] = await withTimeout(Promise.all([
       contract.balanceOf(walletAddress),
       contract.decimals(),
       contract.symbol(),
-    ]);
+    ]));
 
     const formattedBalance = ethers.formatUnits(balance, decimals);
     return `${formattedBalance} ${symbol}`;
@@ -85,16 +153,46 @@ export async function estimateGas(
   const provider = getProvider(network);
 
   try {
-    // Estimate gas limit
-    const gasLimit = await provider.estimateGas({
-      from,
-      to,
-      value: ethers.parseEther(value),
-      data,
-    });
+    // First check if addresses are valid and have balance
+    const fromBalance = await provider.getBalance(from);
+    const transferValue = ethers.parseEther(value);
+    
+    if (fromBalance < transferValue) {
+      throw new Error(`Insufficient balance: has ${ethers.formatEther(fromBalance)} ETH, needs ${value} ETH`);
+    }
+
+    // Check if destination is a contract
+    const code = await provider.getCode(to);
+    const isContract = code !== '0x';
+    
+    // Estimate gas limit with error handling
+    let gasLimit;
+    try {
+      gasLimit = await withTimeout(provider.estimateGas({
+        from,
+        to,
+        value: transferValue,
+        data,
+      }));
+    } catch (estimateError) {
+      const errorMsg = estimateError instanceof Error ? estimateError.message : 'Unknown error';
+      
+      if (errorMsg.includes('CALL_EXCEPTION') || errorMsg.includes('execution reverted')) {
+        let reason = '';
+        if (isContract) {
+          reason = `The destination address is a smart contract that rejected the transaction.`;
+        } else {
+          reason = `The transaction would fail on-chain. The destination address may be invalid or restricted.`;
+        }
+        
+        throw new Error(`${reason}\n\nSuggestion: Try with a different recipient address (e.g., a regular wallet address)`);
+      }
+      
+      throw estimateError;
+    }
 
     // Get gas price information
-    const feeData = await provider.getFeeData();
+    const feeData = await withTimeout(provider.getFeeData());
     
     const gasPrice = feeData.gasPrice ? ethers.formatUnits(feeData.gasPrice, 'gwei') : '0';
     const maxFeePerGas = feeData.maxFeePerGas ? ethers.formatUnits(feeData.maxFeePerGas, 'gwei') : '0';
@@ -124,7 +222,7 @@ export async function getCurrentGasPrice(network: string = 'pharos'): Promise<{
   maxPriorityFeePerGas: string;
 }> {
   const provider = getProvider(network);
-  const feeData = await provider.getFeeData();
+  const feeData = await withTimeout(provider.getFeeData());
 
   return {
     gasPrice: feeData.gasPrice ? `${ethers.formatUnits(feeData.gasPrice, 'gwei')} Gwei` : 'N/A',
